@@ -1,0 +1,20 @@
+# Rust
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Data files (downloaded at build time)
+/data/
+/static/flags/
+
+# OS
+.DS_Store
+Thumbs.db

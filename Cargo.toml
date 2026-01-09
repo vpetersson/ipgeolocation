@@ -1,0 +1,45 @@
+[package]
+name = "ipgeolocation"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance IP geolocation API service"
+license = "MIT"
+
+[dependencies]
+# Web framework
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+
+# IP geolocation
+maxminddb = "0.27"
+
+# Timezone from coordinates
+tzf-rs = "1"
+
+# Caching
+moka = { version = "0.12", features = ["sync"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Timezone calculations
+chrono = "0.4"
+chrono-tz = "0.10"
+
+[dev-dependencies]
+reqwest = { version = "0.13", features = ["json"] }
+tokio-test = "0.4"
+serde_urlencoded = "0.7"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
