@@ -176,8 +176,9 @@ fn create_test_state(mock: MockGeoIpReader) -> AppState {
 /// Test ipgeo endpoint with valid IP
 #[tokio::test]
 async fn test_ipgeo_valid_ip() {
-    let mock = MockGeoIpReader::new()
-        .with_response("8.8.8.8", Ok(GeoData {
+    let mock = MockGeoIpReader::new().with_response(
+        "8.8.8.8",
+        Ok(GeoData {
             latitude: Some(37.751),
             longitude: Some(-97.822),
             city: Some("Mountain View".to_string()),
@@ -187,7 +188,8 @@ async fn test_ipgeo_valid_ip() {
             state_code: Some("CA".to_string()),
             postal_code: Some("94043".to_string()),
             geoname_id: Some(5375480),
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -256,8 +258,9 @@ async fn test_ipgeo_unknown_ip() {
 /// Test ipgeo endpoint caching
 #[tokio::test]
 async fn test_ipgeo_caching() {
-    let mock = MockGeoIpReader::new()
-        .with_response("1.1.1.1", Ok(GeoData {
+    let mock = MockGeoIpReader::new().with_response(
+        "1.1.1.1",
+        Ok(GeoData {
             latitude: Some(51.5074),
             longitude: Some(-0.1278),
             city: Some("London".to_string()),
@@ -267,7 +270,8 @@ async fn test_ipgeo_caching() {
             state_code: Some("ENG".to_string()),
             postal_code: None,
             geoname_id: Some(2643743),
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -309,8 +313,9 @@ async fn test_ipgeo_caching() {
 /// Test ipgeo endpoint Cache-Control headers
 #[tokio::test]
 async fn test_ipgeo_cache_control_headers() {
-    let mock = MockGeoIpReader::new()
-        .with_response("8.8.4.4", Ok(GeoData {
+    let mock = MockGeoIpReader::new().with_response(
+        "8.8.4.4",
+        Ok(GeoData {
             latitude: Some(37.0),
             longitude: Some(-97.0),
             city: None,
@@ -320,7 +325,8 @@ async fn test_ipgeo_cache_control_headers() {
             state_code: None,
             postal_code: None,
             geoname_id: None,
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -354,9 +360,10 @@ async fn test_ipgeo_cache_control_headers() {
 /// Test ipgeo endpoint with missing coordinates (no timezone can be determined)
 #[tokio::test]
 async fn test_ipgeo_no_coordinates() {
-    let mock = MockGeoIpReader::new()
-        .with_response("192.0.2.1", Ok(GeoData {
-            latitude: None,  // No coordinates
+    let mock = MockGeoIpReader::new().with_response(
+        "192.0.2.1",
+        Ok(GeoData {
+            latitude: None, // No coordinates
             longitude: None,
             city: Some("Unknown".to_string()),
             country_name: Some("Reserved".to_string()),
@@ -365,7 +372,8 @@ async fn test_ipgeo_no_coordinates() {
             state_code: None,
             postal_code: None,
             geoname_id: None,
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -401,9 +409,10 @@ async fn test_ipgeo_no_coordinates() {
 /// Test ipgeo endpoint with partial coordinates (only latitude)
 #[tokio::test]
 async fn test_ipgeo_partial_coordinates() {
-    let mock = MockGeoIpReader::new()
-        .with_response("198.51.100.1", Ok(GeoData {
-            latitude: Some(40.0),  // Only latitude
+    let mock = MockGeoIpReader::new().with_response(
+        "198.51.100.1",
+        Ok(GeoData {
+            latitude: Some(40.0), // Only latitude
             longitude: None,      // No longitude
             city: Some("Partial".to_string()),
             country_name: Some("Test".to_string()),
@@ -412,7 +421,8 @@ async fn test_ipgeo_partial_coordinates() {
             state_code: None,
             postal_code: None,
             geoname_id: None,
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -449,8 +459,9 @@ async fn test_ipgeo_partial_coordinates() {
 /// Test v1/ipgeo endpoint returns full format
 #[tokio::test]
 async fn test_v1_ipgeo_full_format() {
-    let mock = MockGeoIpReader::new()
-        .with_response("8.8.8.8", Ok(GeoData {
+    let mock = MockGeoIpReader::new().with_response(
+        "8.8.8.8",
+        Ok(GeoData {
             latitude: Some(37.751),
             longitude: Some(-97.822),
             city: Some("Mountain View".to_string()),
@@ -460,7 +471,8 @@ async fn test_v1_ipgeo_full_format() {
             state_code: Some("CA".to_string()),
             postal_code: Some("94043".to_string()),
             geoname_id: Some(5375480),
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()
@@ -584,7 +596,10 @@ async fn test_ipgeo_invalid_ip() {
 
     let json: serde_json::Value = response.json().await.unwrap();
     assert_eq!(json["code"], "INVALID_IP");
-    assert!(json["error"].as_str().unwrap().contains("Invalid IP address"));
+    assert!(json["error"]
+        .as_str()
+        .unwrap()
+        .contains("Invalid IP address"));
 }
 
 /// Test timezone endpoint with invalid latitude returns 400
@@ -714,8 +729,9 @@ async fn test_v1_ipgeo_invalid_ip() {
 /// Test v1/ipgeo with EU country (check is_eu flag)
 #[tokio::test]
 async fn test_v1_ipgeo_eu_country() {
-    let mock = MockGeoIpReader::new()
-        .with_response("1.2.3.4", Ok(GeoData {
+    let mock = MockGeoIpReader::new().with_response(
+        "1.2.3.4",
+        Ok(GeoData {
             latitude: Some(52.52),
             longitude: Some(13.405),
             city: Some("Berlin".to_string()),
@@ -725,7 +741,8 @@ async fn test_v1_ipgeo_eu_country() {
             state_code: Some("BE".to_string()),
             postal_code: Some("10115".to_string()),
             geoname_id: Some(2950159),
-        }));
+        }),
+    );
 
     let state = create_test_state(mock);
     let app = Router::new()

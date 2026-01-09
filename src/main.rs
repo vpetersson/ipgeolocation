@@ -48,8 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize GeoIP reader
     tracing::info!("Loading GeoIP database from: {}", geoip_db_path);
-    let geoip_reader = GeoIpReader::open(&geoip_db_path)
-        .map_err(|e| format!("Failed to open GeoIP database at '{}': {}", geoip_db_path, e))?;
+    let geoip_reader = GeoIpReader::open(&geoip_db_path).map_err(|e| {
+        format!(
+            "Failed to open GeoIP database at '{}': {}",
+            geoip_db_path, e
+        )
+    })?;
 
     // Initialize cache
     let cache_config = CacheConfig {

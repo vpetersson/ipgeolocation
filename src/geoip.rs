@@ -63,12 +63,8 @@ impl GeoIpReader {
 
         // Extract subdivisions (state/province)
         let subdivision = city.subdivisions.first();
-        let state_prov = subdivision
-            .and_then(|s| s.names.english)
-            .map(String::from);
-        let state_code = subdivision
-            .and_then(|s| s.iso_code)
-            .map(String::from);
+        let state_prov = subdivision.and_then(|s| s.names.english).map(String::from);
+        let state_code = subdivision.and_then(|s| s.iso_code).map(String::from);
 
         // Extract postal code
         let postal_code = city.postal.code.map(String::from);
@@ -133,8 +129,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockGeoIpReader;
+    use super::*;
 
     #[test]
     fn test_invalid_ip() {
@@ -207,8 +203,9 @@ mod tests {
 
     #[test]
     fn test_mock_geoip_reader_found() {
-        let mock = MockGeoIpReader::new()
-            .with_response("8.8.8.8", Ok(GeoData {
+        let mock = MockGeoIpReader::new().with_response(
+            "8.8.8.8",
+            Ok(GeoData {
                 latitude: Some(37.751),
                 longitude: Some(-97.822),
                 city: Some("Mountain View".to_string()),
@@ -218,7 +215,8 @@ mod tests {
                 state_code: Some("CA".to_string()),
                 postal_code: Some("94043".to_string()),
                 geoname_id: Some(5375480),
-            }));
+            }),
+        );
 
         let result = mock.lookup("8.8.8.8");
         assert!(result.is_ok());
@@ -236,8 +234,7 @@ mod tests {
 
     #[test]
     fn test_mock_geoip_reader_with_error() {
-        let mock = MockGeoIpReader::new()
-            .with_response("0.0.0.0", Err(GeoIpError::NotFound));
+        let mock = MockGeoIpReader::new().with_response("0.0.0.0", Err(GeoIpError::NotFound));
 
         let result = mock.lookup("0.0.0.0");
         assert!(result.is_err());

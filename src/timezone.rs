@@ -1,5 +1,5 @@
-use tzf_rs::DefaultFinder;
 use std::sync::LazyLock;
+use tzf_rs::DefaultFinder;
 
 /// Global timezone finder instance
 /// tzf-rs embeds timezone boundary data at compile time
