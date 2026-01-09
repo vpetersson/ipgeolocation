@@ -4,8 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::services::ServeDir;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use ipgeolocation::cache::{CacheConfig, GeoCache};
@@ -140,7 +139,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         client_ip = %client_ip,
                     )
                 })
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
+                    tracing::info!(
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        "started processing request"
+                    );
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>,
+                     latency: std::time::Duration,
+                     _span: &tracing::Span| {
+                        tracing::info!(
+                            status = %response.status().as_u16(),
+                            latency_ms = %latency.as_millis(),
+                            "finished processing request"
+                        );
+                    },
+                ),
         );
 
     tracing::info!("Starting server on {}", bind_address);
