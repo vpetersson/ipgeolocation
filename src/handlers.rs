@@ -79,7 +79,9 @@ fn build_full_response(ip: &str, geo_data: &GeoData) -> IpGeoResponseFull {
     };
 
     // Get timezone details
-    let tz_details = timezone_name.as_ref().and_then(|tz| get_timezone_details(tz));
+    let tz_details = timezone_name
+        .as_ref()
+        .and_then(|tz| get_timezone_details(tz));
 
     IpGeoResponseFull {
         ip: Some(ip.to_string()),
@@ -92,9 +94,10 @@ fn build_full_response(ip: &str, geo_data: &GeoData) -> IpGeoResponseFull {
             country_name_official: country_meta.map(|m| m.official_name.to_string()),
             country_capital: country_meta.map(|m| m.capital.to_string()),
             state_prov: geo_data.state_prov.clone(),
-            state_code: geo_data.state_code.as_ref().map(|sc| {
-                format!("{}-{}", geo_data.country_code.as_deref().unwrap_or(""), sc)
-            }),
+            state_code: geo_data
+                .state_code
+                .as_ref()
+                .map(|sc| format!("{}-{}", geo_data.country_code.as_deref().unwrap_or(""), sc)),
             district: None,
             city: geo_data.city.clone(),
             zipcode: geo_data.postal_code.clone(),
@@ -108,9 +111,8 @@ fn build_full_response(ip: &str, geo_data: &GeoData) -> IpGeoResponseFull {
         country_metadata: Some(CountryMetadataInfo {
             calling_code: country_meta.map(|m| m.calling_code.to_string()),
             tld: country_meta.map(|m| m.tld.to_string()),
-            languages: country_meta.map(|m| {
-                m.languages.split(',').map(|s| s.to_string()).collect()
-            }),
+            languages: country_meta
+                .map(|m| m.languages.split(',').map(|s| s.to_string()).collect()),
         }),
         currency: country_meta.map(|m| CurrencyInfo {
             code: Some(m.currency_code.to_string()),

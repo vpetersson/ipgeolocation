@@ -258,7 +258,8 @@ mod tests {
 
     #[test]
     fn test_timezone_query_deserialize() {
-        let query: TimezoneQuery = serde_urlencoded::from_str("apiKey=test&lat=59.329504&long=18.069532").unwrap();
+        let query: TimezoneQuery =
+            serde_urlencoded::from_str("apiKey=test&lat=59.329504&long=18.069532").unwrap();
         assert_eq!(query.api_key, Some("test".to_string()));
         assert!((query.lat - 59.329504).abs() < 0.0001);
         assert!((query.long - 18.069532).abs() < 0.0001);

@@ -36,7 +36,8 @@ pub fn get_timezone_details(tz_name: &str) -> Option<TimezoneDetails> {
 
     // Format current time
     let current_time = now_local.format("%Y-%m-%d %H:%M:%S%.3f%z").to_string();
-    let current_time_unix = now_utc.timestamp() as f64 + (now_utc.timestamp_subsec_millis() as f64 / 1000.0);
+    let current_time_unix =
+        now_utc.timestamp() as f64 + (now_utc.timestamp_subsec_millis() as f64 / 1000.0);
 
     Some(TimezoneDetails {
         name: tz_name.to_string(),
@@ -53,7 +54,11 @@ pub fn get_timezone_details(tz_name: &str) -> Option<TimezoneDetails> {
 /// Check if DST exists and is currently active for a timezone
 fn check_dst(tz: &Tz, now_utc: &DateTime<Utc>) -> (bool, bool, i32) {
     // Check January and July to determine if DST exists
-    let year = now_utc.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
+    let year = now_utc
+        .format("%Y")
+        .to_string()
+        .parse::<i32>()
+        .unwrap_or(2024);
 
     let jan = tz.with_ymd_and_hms(year, 1, 15, 12, 0, 0).single();
     let jul = tz.with_ymd_and_hms(year, 7, 15, 12, 0, 0).single();
