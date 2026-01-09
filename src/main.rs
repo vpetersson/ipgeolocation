@@ -1,10 +1,11 @@
-use axum::{routing::get, Router};
+use axum::{extract::ConnectInfo, routing::get, Router};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use ipgeolocation::cache::{CacheConfig, GeoCache};
@@ -13,6 +14,46 @@ use ipgeolocation::handlers::{
     health_handler, ipgeo_full_handler, ipgeo_handler, timezone_full_handler, timezone_handler,
     AppState,
 };
+
+/// Extract client IP from request, checking proxy headers first
+fn extract_client_ip<B>(
+    request: &axum::http::Request<B>,
+    connect_info: Option<SocketAddr>,
+) -> String {
+    // Check Cloudflare header first
+    if let Some(cf_ip) = request
+        .headers()
+        .get("CF-Connecting-IP")
+        .and_then(|v| v.to_str().ok())
+    {
+        return cf_ip.to_string();
+    }
+
+    // Check X-Real-IP (common with nginx)
+    if let Some(real_ip) = request
+        .headers()
+        .get("X-Real-IP")
+        .and_then(|v| v.to_str().ok())
+    {
+        return real_ip.to_string();
+    }
+
+    // Check X-Forwarded-For (take first IP in chain)
+    if let Some(forwarded_for) = request
+        .headers()
+        .get("X-Forwarded-For")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(first_ip) = forwarded_for.split(',').next() {
+            return first_ip.trim().to_string();
+        }
+    }
+
+    // Fall back to direct connection IP
+    connect_info
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -68,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cache: Arc::new(cache),
     };
 
-    // Build router with static file serving for flags
+    // Build router with access logging
     let app = Router::new()
         // Simple format endpoints (backward compatible)
         .route("/ipgeo", get(ipgeo_handler))
@@ -81,7 +122,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Static files (flags, etc.)
         .nest_service("/static", ServeDir::new(&static_dir))
         .with_state(state)
-        .layer(TraceLayer::new_for_http());
+        // Access logging layer with proxy-aware client IP extraction
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    let connect_info = request
+                        .extensions()
+                        .get::<ConnectInfo<SocketAddr>>()
+                        .map(|ci| ci.0);
+
+                    let client_ip = extract_client_ip(request, connect_info);
+
+                    tracing::info_span!(
+                        "request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        client_ip = %client_ip,
+                    )
+                })
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        );
 
     tracing::info!("Starting server on {}", bind_address);
     tracing::info!("Endpoints:");
@@ -92,9 +152,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("  GET /static/flags/*  - Country flag SVGs");
     tracing::info!("  GET /health          - Health check");
 
-    // Start server
+    // Start server with client address extraction
     let listener = tokio::net::TcpListener::bind(bind_address).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

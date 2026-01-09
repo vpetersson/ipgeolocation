@@ -2,6 +2,8 @@
 
 A high-performance, standalone IP geolocation API service built in Rust. Provides IP-to-location and coordinates-to-timezone lookups with a simple REST API.
 
+**Demo:** [geoip.vpetersson.com](https://geoip.vpetersson.com)
+
 ## Features
 
 - **Fast**: Built with Axum and Tokio for high-concurrency async handling
