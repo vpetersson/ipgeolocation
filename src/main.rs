@@ -10,49 +10,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use ipgeolocation::cache::{CacheConfig, GeoCache};
 use ipgeolocation::geoip::GeoIpReader;
 use ipgeolocation::handlers::{
-    health_handler, ipgeo_full_handler, ipgeo_handler, timezone_full_handler, timezone_handler,
-    AppState,
+    extract_client_ip, health_handler, ipgeo_full_handler, ipgeo_handler, root_handler,
+    timezone_full_handler, timezone_handler, AppState,
 };
-
-/// Extract client IP from request, checking proxy headers first
-fn extract_client_ip<B>(
-    request: &axum::http::Request<B>,
-    connect_info: Option<SocketAddr>,
-) -> String {
-    // Check Cloudflare header first
-    if let Some(cf_ip) = request
-        .headers()
-        .get("CF-Connecting-IP")
-        .and_then(|v| v.to_str().ok())
-    {
-        return cf_ip.to_string();
-    }
-
-    // Check X-Real-IP (common with nginx)
-    if let Some(real_ip) = request
-        .headers()
-        .get("X-Real-IP")
-        .and_then(|v| v.to_str().ok())
-    {
-        return real_ip.to_string();
-    }
-
-    // Check X-Forwarded-For (take first IP in chain)
-    if let Some(forwarded_for) = request
-        .headers()
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-    {
-        if let Some(first_ip) = forwarded_for.split(',').next() {
-            return first_ip.trim().to_string();
-        }
-    }
-
-    // Fall back to direct connection IP
-    connect_info
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|| "-".to_string())
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,6 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build router with access logging
     let app = Router::new()
+        // Root endpoint - returns geolocation for client's IP
+        .route("/", get(root_handler))
         // Simple format endpoints (backward compatible)
         .route("/ipgeo", get(ipgeo_handler))
         .route("/timezone", get(timezone_handler))
@@ -130,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .get::<ConnectInfo<SocketAddr>>()
                         .map(|ci| ci.0);
 
-                    let client_ip = extract_client_ip(request, connect_info);
+                    let client_ip = extract_client_ip(request.headers(), connect_info);
 
                     tracing::info_span!(
                         "request",
@@ -161,6 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting server on {}", bind_address);
     tracing::info!("Endpoints:");
+    tracing::info!("  GET /                - Geolocation for client's IP");
     tracing::info!("  GET /ipgeo           - Simple IP geolocation");
     tracing::info!("  GET /timezone        - Simple timezone lookup");
     tracing::info!("  GET /v1/ipgeo        - Full IP geolocation (extended format)");

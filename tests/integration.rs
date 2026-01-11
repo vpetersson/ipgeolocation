@@ -11,10 +11,11 @@ use tokio::net::TcpListener;
 use ipgeolocation::cache::{CacheConfig, GeoCache};
 use ipgeolocation::geoip::mock::MockGeoIpReader;
 use ipgeolocation::handlers::{
-    health_handler, ipgeo_full_handler, ipgeo_handler, timezone_full_handler, timezone_handler,
-    AppState,
+    health_handler, ipgeo_full_handler, ipgeo_handler, root_handler, timezone_full_handler,
+    timezone_handler, AppState,
 };
 use ipgeolocation::models::GeoData;
+use std::net::SocketAddr;
 
 /// Test the health endpoint
 #[tokio::test]
@@ -774,4 +775,309 @@ async fn test_v1_ipgeo_eu_country() {
     assert_eq!(json["location"]["country_code2"], "DE");
     assert_eq!(json["currency"]["code"], "EUR");
     assert_eq!(json["currency"]["symbol"], "€");
+}
+
+// ============================================================================
+// Root Endpoint Tests (/ - client IP geolocation)
+// ============================================================================
+
+/// Test root endpoint returns geolocation for direct connection IP
+#[tokio::test]
+async fn test_root_endpoint_direct_ip() {
+    // The mock will receive 127.0.0.1 as the client IP from direct connection
+    let mock = MockGeoIpReader::new().with_response(
+        "127.0.0.1",
+        Ok(GeoData {
+            latitude: Some(37.751),
+            longitude: Some(-97.822),
+            city: Some("Test City".to_string()),
+            country_name: Some("United States".to_string()),
+            country_code: Some("US".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["city"], "Test City");
+    assert_eq!(json["country_name"], "United States");
+    assert_eq!(json["languages"], "en-US,en");
+}
+
+/// Test root endpoint with X-Forwarded-For header
+#[tokio::test]
+async fn test_root_endpoint_x_forwarded_for() {
+    // The mock should receive the IP from X-Forwarded-For header
+    let mock = MockGeoIpReader::new().with_response(
+        "203.0.113.1",
+        Ok(GeoData {
+            latitude: Some(51.5074),
+            longitude: Some(-0.1278),
+            city: Some("London".to_string()),
+            country_name: Some("United Kingdom".to_string()),
+            country_code: Some("GB".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .header("X-Forwarded-For", "203.0.113.1, 10.0.0.1")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["city"], "London");
+    assert_eq!(json["country_name"], "United Kingdom");
+}
+
+/// Test root endpoint with X-Real-IP header
+#[tokio::test]
+async fn test_root_endpoint_x_real_ip() {
+    let mock = MockGeoIpReader::new().with_response(
+        "198.51.100.1",
+        Ok(GeoData {
+            latitude: Some(35.6762),
+            longitude: Some(139.6503),
+            city: Some("Tokyo".to_string()),
+            country_name: Some("Japan".to_string()),
+            country_code: Some("JP".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .header("X-Real-IP", "198.51.100.1")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["city"], "Tokyo");
+    assert_eq!(json["country_name"], "Japan");
+}
+
+/// Test root endpoint with CF-Connecting-IP header (Cloudflare)
+#[tokio::test]
+async fn test_root_endpoint_cf_connecting_ip() {
+    let mock = MockGeoIpReader::new().with_response(
+        "192.0.2.1",
+        Ok(GeoData {
+            latitude: Some(52.52),
+            longitude: Some(13.405),
+            city: Some("Berlin".to_string()),
+            country_name: Some("Germany".to_string()),
+            country_code: Some("DE".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .header("CF-Connecting-IP", "192.0.2.1")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["city"], "Berlin");
+    assert_eq!(json["country_name"], "Germany");
+}
+
+/// Test root endpoint Cache-Control headers
+#[tokio::test]
+async fn test_root_endpoint_cache_control_headers() {
+    let mock = MockGeoIpReader::new().with_response(
+        "127.0.0.1",
+        Ok(GeoData {
+            latitude: Some(40.0),
+            longitude: Some(-74.0),
+            city: Some("Test".to_string()),
+            country_name: Some("Test Country".to_string()),
+            country_code: Some("TC".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .send()
+        .await
+        .unwrap();
+
+    let cache_control = response.headers().get("cache-control");
+    assert!(cache_control.is_some());
+    assert_eq!(
+        cache_control.unwrap().to_str().unwrap(),
+        "public, max-age=1209600"
+    );
+}
+
+/// Test root endpoint with unknown IP returns empty response
+#[tokio::test]
+async fn test_root_endpoint_unknown_ip() {
+    let mock = MockGeoIpReader::new(); // No responses configured
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["city"], "");
+    assert_eq!(json["country_name"], "");
+    assert_eq!(json["languages"], "");
 }

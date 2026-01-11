@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Query, State},
-    http::{header, StatusCode},
+    extract::{ConnectInfo, Query, State},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use crate::cache::SharedGeoCache;
 use crate::country_data::{get_country_metadata, get_flag_path};
@@ -65,6 +65,34 @@ fn validate_longitude(lng: f64) -> Result<(), ApiError> {
         });
     }
     Ok(())
+}
+
+/// Extract client IP from request headers, checking proxy headers first
+pub fn extract_client_ip(headers: &HeaderMap, connect_info: Option<SocketAddr>) -> String {
+    // Check Cloudflare header first
+    if let Some(cf_ip) = headers
+        .get("CF-Connecting-IP")
+        .and_then(|v| v.to_str().ok())
+    {
+        return cf_ip.to_string();
+    }
+
+    // Check X-Real-IP (common with nginx)
+    if let Some(real_ip) = headers.get("X-Real-IP").and_then(|v| v.to_str().ok()) {
+        return real_ip.to_string();
+    }
+
+    // Check X-Forwarded-For (take first IP in chain)
+    if let Some(forwarded_for) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
+        if let Some(first_ip) = forwarded_for.split(',').next() {
+            return first_ip.trim().to_string();
+        }
+    }
+
+    // Fall back to direct connection IP
+    connect_info
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "-".to_string())
 }
 
 /// Build full response from GeoData
@@ -332,6 +360,52 @@ pub async fn timezone_full_handler(Query(params): Query<TimezoneQuery>) -> impl 
             dst_exists: None,
         },
     };
+
+    (
+        StatusCode::OK,
+        [(header::CACHE_CONTROL, CACHE_CONTROL)],
+        Json(serde_json::to_value(response).unwrap()),
+    )
+}
+
+/// Handler for GET /
+/// Returns geolocation data for the client's IP address
+pub async fn root_handler(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let ip = extract_client_ip(&headers, Some(addr));
+
+    // Validate IP address (should always be valid from extraction, but be safe)
+    if let Err(e) = validate_ip(&ip) {
+        return (
+            StatusCode::BAD_REQUEST,
+            [(header::CACHE_CONTROL, CACHE_CONTROL)],
+            Json(serde_json::to_value(e).unwrap()),
+        );
+    }
+
+    // Check cache first
+    if let Some(cached) = state.cache.get(&ip) {
+        return (
+            StatusCode::OK,
+            [(header::CACHE_CONTROL, CACHE_CONTROL)],
+            Json(serde_json::to_value(cached).unwrap()),
+        );
+    }
+
+    // Lookup in MaxMind database
+    let geo_result = state.geoip.lookup(&ip);
+
+    // Simple response format (same as /ipgeo)
+    let response = match geo_result {
+        Ok(geo_data) => build_simple_response(&geo_data),
+        Err(_) => IpGeoResponse::default(),
+    };
+
+    // Cache the response
+    state.cache.insert(ip, response.clone());
 
     (
         StatusCode::OK,
