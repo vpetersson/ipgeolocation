@@ -589,8 +589,9 @@ pub async fn llms_txt_handler() -> impl IntoResponse {
 /// Robots.txt handler
 ///
 /// Returns robots.txt for search engine crawlers.
-pub async fn robots_txt_handler() -> impl IntoResponse {
-    let robots = r#"User-agent: *
+pub async fn robots_txt_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let robots = format!(
+        r#"User-agent: *
 Allow: /
 Allow: /openapi.yaml
 Allow: /llms.txt
@@ -603,8 +604,10 @@ Allow: /v1/ipgeo
 Allow: /v1/timezone
 
 # Sitemap location
-Sitemap: https://geoip.vpetersson.com/sitemap.xml
-"#;
+Sitemap: {}/sitemap.xml
+"#,
+        state.base_url
+    );
 
     (
         StatusCode::OK,

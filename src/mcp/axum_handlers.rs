@@ -434,10 +434,7 @@ pub async fn mcp_batch_handler(
 
     let responses: Vec<JsonRpcResponse> = requests
         .into_iter()
-        .map(|request| {
-            // Simplified handling - in production, this should be async
-            handle_single_request(&state.geoip, &caller_ip, request)
-        })
+        .map(|request| handle_single_request(&state.geoip, &caller_ip, request))
         .collect();
 
     Json(responses).into_response()
