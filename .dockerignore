@@ -20,9 +20,8 @@ target/
 Dockerfile
 .dockerignore
 
-# Documentation (not needed for build)
+# Markdown documentation (not needed for build, llms.txt is kept)
 *.md
-!README.md
 
 # Test data
 tests/fixtures/

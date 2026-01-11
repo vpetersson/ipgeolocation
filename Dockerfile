@@ -58,7 +58,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
 COPY proto ./proto
 COPY src ./src
-COPY llms.txt ./
 
 # Build release binaries
 RUN cargo build --release --locked
@@ -78,8 +77,8 @@ COPY --from=builder /build/target/release/mcp_server /app/
 COPY --from=assets /assets/GeoLite2-City.mmdb /app/data/
 COPY --from=assets /assets/flags /app/static/flags/
 
-# Copy static files needed at runtime
-COPY --from=builder /build/llms.txt /app/
+# Copy static files needed at runtime (directly from source, not builder)
+COPY llms.txt /app/
 
 # Configuration via environment variables
 ENV BIND_ADDRESS=0.0.0.0:3000 \
