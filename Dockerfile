@@ -45,22 +45,32 @@ RUN git clone --depth 1 --filter=blob:none --sparse https://github.com/lipis/fla
 # =============================================================================
 # Stage 2: Build Rust application using Chainguard Rust image
 # =============================================================================
-FROM cgr.dev/chainguard/rust:latest AS builder
+FROM cgr.dev/chainguard/rust:latest-dev AS builder
+
+# Install protobuf compiler (required for prost-build)
+# Using -dev variant which includes apk
+RUN apk add --no-cache protobuf-dev
 
 # Chainguard images run as nonroot user - use their home directory
 WORKDIR /home/nonroot/app
 
-# Copy manifests first for better layer caching
+# Copy manifests and build files first for better layer caching
 COPY --chown=nonroot:nonroot Cargo.toml Cargo.lock* ./
+COPY --chown=nonroot:nonroot build.rs ./
+COPY --chown=nonroot:nonroot proto ./proto
 
-# Create a dummy main.rs to build dependencies
-RUN mkdir src && \
+# Create dummy source files to build dependencies
+# Must match all [[bin]] and lib targets in Cargo.toml
+RUN mkdir -p src/bin && \
     echo "fn main() {}" > src/main.rs && \
+    echo "fn main() {}" > src/bin/mcp_server.rs && \
+    echo "" > src/lib.rs && \
     cargo build --release && \
     rm -rf src
 
-# Copy actual source code
+# Copy actual source code and other files
 COPY --chown=nonroot:nonroot src ./src
+COPY --chown=nonroot:nonroot llms.txt ./llms.txt
 
 # Touch main.rs to ensure rebuild with actual code
 RUN touch src/main.rs
