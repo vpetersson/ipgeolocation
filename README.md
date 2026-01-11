@@ -1,5 +1,7 @@
 # IP Geolocation Service
 
+[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)](https://app.sbomify.com/public/component/N98g1tf0jyg2)
+
 A high-performance, standalone IP geolocation API service built in Rust. Provides IP-to-location and coordinates-to-timezone lookups with a simple REST API.
 
 **Demo:** [geoip.vpetersson.com](https://geoip.vpetersson.com)
