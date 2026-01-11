@@ -58,9 +58,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
 COPY proto ./proto
 COPY src ./src
+COPY llms.txt ./
 
-# Build release binaries
-RUN cargo build --release --locked
+# Build release binaries (limit jobs to reduce memory usage in constrained environments)
+RUN cargo build --release --locked -j 2
 
 # =============================================================================
 # Stage 3: Runtime image
@@ -77,8 +78,7 @@ COPY --from=builder /build/target/release/mcp_server /app/
 COPY --from=assets /assets/GeoLite2-City.mmdb /app/data/
 COPY --from=assets /assets/flags /app/static/flags/
 
-# Copy static files needed at runtime (directly from source, not builder)
-COPY llms.txt /app/
+# Note: llms.txt is embedded in the binary via include_str! at compile time
 
 # Configuration via environment variables
 ENV BIND_ADDRESS=0.0.0.0:3000 \
