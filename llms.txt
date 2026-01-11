@@ -1,0 +1,184 @@
+# IP Geolocation API
+
+> A fast, standalone API for IP-to-location and coordinate-to-timezone lookups.
+
+## What This API Does
+
+This API provides geolocation services:
+- Convert IP addresses (IPv4/IPv6) to geographic locations (city, country, coordinates)
+- Look up timezones from latitude/longitude coordinates
+- Get country metadata: currency, languages, calling codes, flag images
+
+## When to Use This API
+
+Use this API when you need to:
+- Determine a user's location from their IP address
+- Get timezone information for a geographic location
+- Localize content based on user location (currency, language)
+- Display country flags or regional information
+
+## Base URL
+
+https://geoip.vpetersson.com
+
+## Quick Reference
+
+### IP Geolocation
+
+**Simple format:**
+```
+GET /ipgeo?ip={ip_address}
+```
+
+**Full format (more details):**
+```
+GET /v1/ipgeo?ip={ip_address}
+```
+
+### Timezone Lookup
+
+**Simple format:**
+```
+GET /timezone?lat={latitude}&long={longitude}
+```
+
+**Full format (with current time, DST info):**
+```
+GET /v1/timezone?lat={latitude}&long={longitude}
+```
+
+### Auto-detect Client IP
+
+```
+GET /
+```
+
+Returns geolocation for the requesting client's IP address.
+
+## Examples
+
+### Get location for IP 8.8.8.8
+
+```bash
+curl "https://geoip.vpetersson.com/ipgeo?ip=8.8.8.8"
+```
+
+Response:
+```json
+{
+  "latitude": 37.751,
+  "longitude": -97.822,
+  "city": "Mountain View",
+  "country_name": "United States",
+  "time_zone": {"name": "America/Chicago"},
+  "languages": "en-US,en"
+}
+```
+
+### Get full location details
+
+```bash
+curl "https://geoip.vpetersson.com/v1/ipgeo?ip=8.8.8.8"
+```
+
+Returns extended data: continent, country codes (ISO2/ISO3), capital, currency, flag URL, timezone with DST info.
+
+### Get timezone for Stockholm coordinates
+
+```bash
+curl "https://geoip.vpetersson.com/timezone?lat=59.329504&long=18.069532"
+```
+
+Response:
+```json
+{"timezone": "Europe/Stockholm"}
+```
+
+## Response Caching
+
+All responses include `Cache-Control: public, max-age=1209600` (2 weeks). 
+IP geolocation data changes infrequently, so results can be cached aggressively.
+
+## Error Handling
+
+Errors return HTTP 400 with a JSON body:
+```json
+{
+  "error": "Invalid IP address: not-an-ip",
+  "code": "INVALID_IP"
+}
+```
+
+Error codes: `INVALID_IP`, `INVALID_LATITUDE`, `INVALID_LONGITUDE`
+
+## Parameter Constraints
+
+- `ip`: Valid IPv4 or IPv6 address
+- `lat`: Latitude between -90 and 90
+- `long`: Longitude between -180 and 180
+
+## API Discovery
+
+OpenAPI specification (machine-readable):
+- https://geoip.vpetersson.com/openapi.yaml
+- https://geoip.vpetersson.com/.well-known/openapi.yaml
+
+AI plugin manifest (ChatGPT-style):
+- https://geoip.vpetersson.com/.well-known/ai-plugin.json
+
+Sitemap:
+- https://geoip.vpetersson.com/sitemap.xml
+
+## MCP Server (Model Context Protocol)
+
+This API supports MCP for direct integration with Claude Desktop, Cursor, and other MCP clients.
+
+### MCP over HTTP (same port as REST API)
+
+```
+POST /mcp         - JSON-RPC 2.0 endpoint
+POST /mcp/batch   - Batch JSON-RPC 2.0 endpoint
+GET  /mcp/sse     - Server-Sent Events
+GET  /mcp/info    - Server capabilities
+```
+
+### MCP Tools
+
+- `geoip_lookup` - Look up location for an IP address
+- `geoip_bulk_lookup` - Look up multiple IPs (max 100)
+- `geoip_lookup_self` - Look up caller's IP (HTTP transport)
+- `timezone_lookup` - Look up timezone for coordinates
+
+### MCP Resources
+
+- `geoip://schema` - JSON Schema for response types
+- `geoip://data-source` - Data source information
+- `geoip://limits` - API limits and constraints
+- `geoip://privacy` - Privacy information
+
+### Example: Call MCP Tool via HTTP
+
+```bash
+curl -X POST https://geoip.vpetersson.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "geoip_lookup", "arguments": {"ip": "8.8.8.8"}}}'
+```
+
+### STDIO Transport (for Claude Desktop)
+
+```json
+{
+  "mcpServers": {
+    "ip-geolocation": {
+      "command": "/path/to/mcp_server",
+      "args": ["--transport", "stdio"]
+    }
+  }
+}
+```
+
+## Data Sources
+
+- IP Geolocation: MaxMind GeoLite2-City database
+- Timezone Boundaries: tzf-rs library
+- Country Metadata: Embedded dataset

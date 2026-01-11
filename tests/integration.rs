@@ -11,11 +11,15 @@ use tokio::net::TcpListener;
 use ipgeolocation::cache::{CacheConfig, GeoCache};
 use ipgeolocation::geoip::mock::MockGeoIpReader;
 use ipgeolocation::handlers::{
-    health_handler, ipgeo_full_handler, ipgeo_handler, root_handler, timezone_full_handler,
-    timezone_handler, AppState,
+    health_handler, ipgeo_full_handler, ipgeo_handler, llms_txt_handler, openapi_handler,
+    root_handler, sitemap_handler, timezone_full_handler, timezone_handler,
+    wellknown_ai_plugin_handler, wellknown_openapi_handler, ApiDoc, AppState,
 };
 use ipgeolocation::models::GeoData;
+use ipgeolocation::proto::geolocation;
+use prost::Message;
 use std::net::SocketAddr;
+use utoipa::OpenApi;
 
 /// Test the health endpoint
 #[tokio::test]
@@ -171,6 +175,18 @@ fn create_test_state(mock: MockGeoIpReader) -> AppState {
     AppState {
         geoip: Arc::new(mock),
         cache: Arc::new(cache),
+        base_url: "https://test.example.com".to_string(),
+    }
+}
+
+/// Create a minimal test state for handlers that only need base_url
+fn create_minimal_test_state() -> AppState {
+    let mock = MockGeoIpReader::new();
+    let cache = GeoCache::new(CacheConfig::default());
+    AppState {
+        geoip: Arc::new(mock),
+        cache: Arc::new(cache),
+        base_url: "https://test.example.com".to_string(),
     }
 }
 
@@ -1080,4 +1096,533 @@ async fn test_root_endpoint_unknown_ip() {
     assert_eq!(json["city"], "");
     assert_eq!(json["country_name"], "");
     assert_eq!(json["languages"], "");
+}
+
+// ============================================================================
+// LLM/Agent Documentation Endpoint Tests
+// ============================================================================
+
+/// Test OpenAPI specification endpoint returns valid YAML
+#[tokio::test]
+async fn test_openapi_endpoint() {
+    let state = create_minimal_test_state();
+    let app = Router::new()
+        .route("/openapi.yaml", get(openapi_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/openapi.yaml", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/yaml"));
+
+    // Check content contains expected OpenAPI structure
+    let body = response.text().await.unwrap();
+    assert!(body.contains("openapi: 3.1"));
+    assert!(body.contains("IP Geolocation API"));
+    assert!(body.contains("/ipgeo"));
+    assert!(body.contains("/timezone"));
+    assert!(body.contains("/v1/ipgeo"));
+    assert!(body.contains("/v1/timezone"));
+    assert!(body.contains("/health"));
+}
+
+/// Test OpenAPI specification is valid YAML
+#[tokio::test]
+async fn test_openapi_valid_yaml() {
+    let state = create_minimal_test_state();
+    let app = Router::new()
+        .route("/openapi.yaml", get(openapi_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/openapi.yaml", addr))
+        .send()
+        .await
+        .unwrap();
+
+    let body = response.text().await.unwrap();
+
+    // Parse as YAML to validate syntax using yaml-rust2
+    let yaml_docs = yaml_rust2::YamlLoader::load_from_str(&body);
+    assert!(yaml_docs.is_ok(), "OpenAPI spec should be valid YAML");
+
+    let docs = yaml_docs.unwrap();
+    assert!(!docs.is_empty(), "Should have at least one YAML document");
+
+    let yaml = &docs[0];
+    assert_eq!(yaml["openapi"].as_str(), Some("3.1.0"));
+    assert!(!yaml["paths"].is_badvalue());
+    assert!(!yaml["components"]["schemas"].is_badvalue());
+}
+
+/// Test OpenAPI spec is generated from code (not static file)
+#[tokio::test]
+async fn test_openapi_generated_from_code() {
+    // Verify ApiDoc generates valid spec
+    let spec = ApiDoc::openapi();
+    let yaml = spec.to_yaml().unwrap();
+
+    // Should contain all our endpoints
+    assert!(yaml.contains("/ipgeo"));
+    assert!(yaml.contains("/timezone"));
+    assert!(yaml.contains("/v1/ipgeo"));
+    assert!(yaml.contains("/v1/timezone"));
+    assert!(yaml.contains("/health"));
+
+    // Should contain our schemas
+    assert!(yaml.contains("IpGeoResponse"));
+    assert!(yaml.contains("TimezoneResponse"));
+    assert!(yaml.contains("ApiErrorResponse"));
+}
+
+/// Test LLM documentation endpoint returns valid content
+#[tokio::test]
+async fn test_llms_txt_endpoint() {
+    let app = Router::new().route("/llms.txt", get(llms_txt_handler));
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/llms.txt", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("text/plain"));
+
+    // Check content contains expected documentation
+    let body = response.text().await.unwrap();
+    assert!(body.contains("IP Geolocation API"));
+    assert!(body.contains("/ipgeo"));
+    assert!(body.contains("/timezone"));
+    assert!(body.contains("openapi.yaml"));
+    assert!(body.contains("curl"));
+}
+
+/// Test LLM documentation contains all required sections
+#[tokio::test]
+async fn test_llms_txt_content_structure() {
+    let app = Router::new().route("/llms.txt", get(llms_txt_handler));
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/llms.txt", addr))
+        .send()
+        .await
+        .unwrap();
+
+    let body = response.text().await.unwrap();
+
+    // Check required sections
+    assert!(body.contains("What This API Does"));
+    assert!(body.contains("When to Use This API"));
+    assert!(body.contains("Quick Reference"));
+    assert!(body.contains("Examples"));
+    assert!(body.contains("Error Handling"));
+    assert!(body.contains("API Discovery"));
+}
+
+/// Test sitemap.xml endpoint returns valid XML
+#[tokio::test]
+async fn test_sitemap_endpoint() {
+    let state = create_minimal_test_state();
+    let app = Router::new()
+        .route("/sitemap.xml", get(sitemap_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/sitemap.xml", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/xml"));
+
+    // Check XML content
+    let body = response.text().await.unwrap();
+    assert!(body.contains("<?xml version"));
+    assert!(body.contains("<urlset"));
+    assert!(body.contains("test.example.com")); // Uses base_url from state
+    assert!(body.contains("/ipgeo"));
+    assert!(body.contains("/timezone"));
+    assert!(body.contains("/openapi.yaml"));
+    assert!(body.contains("/llms.txt"));
+}
+
+/// Test .well-known/openapi.yaml endpoint
+#[tokio::test]
+async fn test_wellknown_openapi_endpoint() {
+    let state = create_minimal_test_state();
+    let app = Router::new()
+        .route("/.well-known/openapi.yaml", get(wellknown_openapi_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/.well-known/openapi.yaml", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/yaml"));
+
+    // Check it's the same as /openapi.yaml
+    let body = response.text().await.unwrap();
+    assert!(body.contains("openapi: 3.1"));
+    assert!(body.contains("IP Geolocation API"));
+}
+
+/// Test .well-known/ai-plugin.json endpoint
+#[tokio::test]
+async fn test_wellknown_ai_plugin_endpoint() {
+    let state = create_minimal_test_state();
+    let app = Router::new()
+        .route(
+            "/.well-known/ai-plugin.json",
+            get(wellknown_ai_plugin_handler),
+        )
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/.well-known/ai-plugin.json", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/json"));
+
+    // Check JSON structure
+    let json: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(json["schema_version"], "v1");
+    assert_eq!(json["name_for_model"], "ip_geolocation");
+    assert!(!json["description_for_model"].as_str().unwrap().is_empty());
+    assert_eq!(json["api"]["type"], "openapi");
+    assert!(json["api"]["url"]
+        .as_str()
+        .unwrap()
+        .contains("openapi.yaml"));
+}
+
+// ============================================================================
+// Protobuf Response Tests
+// ============================================================================
+
+/// Test timezone endpoint with protobuf Accept header
+#[tokio::test]
+async fn test_timezone_protobuf_response() {
+    let app = Router::new().route("/timezone", get(timezone_handler));
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!(
+            "http://{}/timezone?lat=59.329504&long=18.069532",
+            addr
+        ))
+        .header("Accept", "application/x-protobuf")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type is protobuf
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/x-protobuf"));
+
+    // Decode protobuf response
+    let bytes = response.bytes().await.unwrap();
+    let proto = geolocation::TimezoneResponse::decode(bytes).unwrap();
+    assert_eq!(proto.timezone, "Europe/Stockholm");
+}
+
+/// Test ipgeo endpoint with protobuf Accept header
+#[tokio::test]
+async fn test_ipgeo_protobuf_response() {
+    let mock = MockGeoIpReader::new().with_response(
+        "8.8.8.8",
+        Ok(GeoData {
+            latitude: Some(37.751),
+            longitude: Some(-97.822),
+            city: Some("Mountain View".to_string()),
+            country_name: Some("United States".to_string()),
+            country_code: Some("US".to_string()),
+            state_prov: Some("California".to_string()),
+            state_code: Some("CA".to_string()),
+            postal_code: Some("94043".to_string()),
+            geoname_id: Some(5375480),
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/ipgeo", get(ipgeo_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/ipgeo?ip=8.8.8.8", addr))
+        .header("Accept", "application/x-protobuf")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type is protobuf
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/x-protobuf"));
+
+    // Decode protobuf response
+    let bytes = response.bytes().await.unwrap();
+    let proto = geolocation::IpGeoResponse::decode(bytes).unwrap();
+    assert_eq!(proto.city, "Mountain View");
+    assert_eq!(proto.country_name, "United States");
+    assert!(proto.latitude.is_some());
+}
+
+/// Test v1/ipgeo endpoint with protobuf Accept header
+#[tokio::test]
+async fn test_v1_ipgeo_protobuf_response() {
+    let mock = MockGeoIpReader::new().with_response(
+        "1.1.1.1",
+        Ok(GeoData {
+            latitude: Some(51.5074),
+            longitude: Some(-0.1278),
+            city: Some("London".to_string()),
+            country_name: Some("United Kingdom".to_string()),
+            country_code: Some("GB".to_string()),
+            state_prov: None,
+            state_code: None,
+            postal_code: None,
+            geoname_id: None,
+        }),
+    );
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/v1/ipgeo", get(ipgeo_full_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/v1/ipgeo?ip=1.1.1.1", addr))
+        .header("Accept", "application/x-protobuf")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Check content type is protobuf
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/x-protobuf"));
+
+    // Decode protobuf response
+    let bytes = response.bytes().await.unwrap();
+    let proto = geolocation::IpGeoResponseFull::decode(bytes).unwrap();
+    assert_eq!(proto.ip, Some("1.1.1.1".to_string()));
+    assert!(proto.location.is_some());
+    let location = proto.location.unwrap();
+    assert_eq!(location.city, Some("London".to_string()));
+}
+
+/// Test error response in protobuf format
+#[tokio::test]
+async fn test_error_protobuf_response() {
+    let mock = MockGeoIpReader::new();
+
+    let state = create_test_state(mock);
+    let app = Router::new()
+        .route("/ipgeo", get(ipgeo_handler))
+        .with_state(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/ipgeo?ip=invalid-ip", addr))
+        .header("Accept", "application/x-protobuf")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+
+    // Check content type is protobuf
+    let content_type = response.headers().get("content-type");
+    assert!(content_type.is_some());
+    assert!(content_type
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("application/x-protobuf"));
+
+    // Decode protobuf error response
+    let bytes = response.bytes().await.unwrap();
+    let proto = geolocation::ApiError::decode(bytes).unwrap();
+    assert_eq!(proto.code, "INVALID_IP");
+    assert!(proto.error.contains("Invalid IP address"));
 }

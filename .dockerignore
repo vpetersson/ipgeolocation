@@ -1,0 +1,32 @@
+# Build artifacts
+target/
+*.rs.bk
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# CI/CD
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Markdown documentation (not needed for build, llms.txt is kept)
+*.md
+
+# Test data
+tests/fixtures/
+
+# Local development
+.env
+.env.*
+*.local
