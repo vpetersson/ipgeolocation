@@ -593,15 +593,6 @@ pub async fn robots_txt_handler(State(state): State<AppState>) -> impl IntoRespo
     let robots = format!(
         r#"User-agent: *
 Allow: /
-Allow: /openapi.yaml
-Allow: /llms.txt
-Allow: /sitemap.xml
-
-# API endpoints - allow crawling for discovery
-Allow: /ipgeo
-Allow: /timezone
-Allow: /v1/ipgeo
-Allow: /v1/timezone
 
 # Sitemap location
 Sitemap: {}/sitemap.xml

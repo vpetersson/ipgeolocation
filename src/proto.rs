@@ -110,10 +110,16 @@ pub fn encode_proto<T: Message>(msg: &T) -> Vec<u8> {
     msg.encode_to_vec()
 }
 
-/// Content type for protobuf responses
+/// Canonical content type for protobuf responses.
+///
+/// This is used for all protobuf response bodies. The server also accepts
+/// `application/protobuf` in `Accept` headers for compatibility.
 pub const PROTOBUF_CONTENT_TYPE: &str = "application/x-protobuf";
 
 /// Check if request accepts protobuf
+///
+/// Accepts both `application/x-protobuf` (canonical) and `application/protobuf` (legacy).
+/// Responses are always sent with `PROTOBUF_CONTENT_TYPE`.
 pub fn accepts_protobuf(accept: Option<&str>) -> bool {
     accept
         .map(|a| a.contains("application/x-protobuf") || a.contains("application/protobuf"))

@@ -127,7 +127,7 @@ where
             // Full API functionality requires the Axum handlers with state
             let body = serde_json::json!({
                 "error": "This endpoint requires HTTP/1.1 or HTTP/2",
-                "hint": "HTTP/3 currently supports /health, /openapi.yaml, /llms.txt, and /sitemap.xml",
+                "hint": "HTTP/3 currently supports /health, /openapi.yaml, /.well-known/openapi.yaml, /llms.txt, and /sitemap.xml",
                 "code": "HTTP3_LIMITED"
             });
             (

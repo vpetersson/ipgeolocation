@@ -103,7 +103,7 @@ pub struct BulkLookupResult {
     pub errors: Vec<BulkLookupError>,
 }
 
-/// Check if an IP address is private/loopback
+/// Check if an IP address is private/loopback/link-local
 fn is_private_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(ipv4) => {
@@ -113,7 +113,14 @@ fn is_private_ip(ip: &IpAddr) -> bool {
                 || ipv4.is_broadcast()
                 || ipv4.is_unspecified()
         }
-        IpAddr::V6(ipv6) => ipv6.is_loopback() || ipv6.is_unspecified(),
+        IpAddr::V6(ipv6) => {
+            ipv6.is_loopback()
+                || ipv6.is_unspecified()
+                // Unique local addresses (fc00::/7) - RFC 4193
+                || (ipv6.segments()[0] & 0xfe00) == 0xfc00
+                // Link-local addresses (fe80::/10) - RFC 4291
+                || (ipv6.segments()[0] & 0xffc0) == 0xfe80
+        }
     }
 }
 

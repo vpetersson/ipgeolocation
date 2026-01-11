@@ -13,7 +13,9 @@ RUN apk add --no-cache curl git
 
 WORKDIR /assets
 
-# Download GeoLite2-City database (optional - can mount at runtime instead)
+# Download GeoLite2-City database if credentials provided.
+# If not provided, a placeholder is created and you MUST mount a real database
+# at runtime: docker run -v /path/to/GeoLite2-City.mmdb:/app/data/GeoLite2-City.mmdb
 RUN if [ -n "$MAXMIND_LICENSE_KEY" ] && [ -n "$MAXMIND_ACCOUNT_ID" ]; then \
         curl -fsSL "https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz" \
             -u "${MAXMIND_ACCOUNT_ID}:${MAXMIND_LICENSE_KEY}" \
@@ -21,7 +23,8 @@ RUN if [ -n "$MAXMIND_LICENSE_KEY" ] && [ -n "$MAXMIND_ACCOUNT_ID" ]; then \
         tar -xzf GeoLite2-City.tar.gz --strip-components=1 --wildcards '*/GeoLite2-City.mmdb' && \
         rm -f GeoLite2-City.tar.gz; \
     else \
-        echo "No MaxMind credentials - creating placeholder (mount real DB at runtime)" && \
+        echo "WARNING: No MaxMind credentials provided." && \
+        echo "You MUST mount a GeoLite2-City.mmdb file at /app/data/GeoLite2-City.mmdb" && \
         touch GeoLite2-City.mmdb; \
     fi
 
