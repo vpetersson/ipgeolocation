@@ -20,8 +20,9 @@ RUN if [ -n "$MAXMIND_LICENSE_KEY" ] && [ -n "$MAXMIND_ACCOUNT_ID" ]; then \
         curl -fsSL "https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz" \
             -u "${MAXMIND_ACCOUNT_ID}:${MAXMIND_LICENSE_KEY}" \
             -o GeoLite2-City.tar.gz && \
-        tar -xzf GeoLite2-City.tar.gz --strip-components=1 --wildcards '*/GeoLite2-City.mmdb' && \
-        rm -f GeoLite2-City.tar.gz; \
+        tar -xzf GeoLite2-City.tar.gz && \
+        mv GeoLite2-City_*/GeoLite2-City.mmdb . && \
+        rm -rf GeoLite2-City.tar.gz GeoLite2-City_*; \
     else \
         echo "WARNING: No MaxMind credentials provided." && \
         echo "You MUST mount a GeoLite2-City.mmdb file at /app/data/GeoLite2-City.mmdb" && \
