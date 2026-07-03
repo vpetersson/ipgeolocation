@@ -1626,3 +1626,67 @@ async fn test_error_protobuf_response() {
     assert_eq!(proto.code, "INVALID_IP");
     assert!(proto.error.contains("Invalid IP address"));
 }
+
+/// The shared CORS policy allows any origin to read the API from a browser.
+/// Guards the header a static browser app depends on to read responses.
+#[tokio::test]
+async fn test_cors_allows_any_origin() {
+    let app = Router::new()
+        .route("/health", get(health_handler))
+        .layer(ipgeolocation::cors_layer());
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let client = reqwest::Client::new();
+
+    // A simple cross-origin GET must carry Access-Control-Allow-Origin so the
+    // browser lets the calling script read the body.
+    let response = client
+        .get(format!("http://{}/health", addr))
+        .header("Origin", "https://example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "*"
+    );
+
+    // A CORS preflight (OPTIONS) is answered by the layer and advertises GET.
+    let preflight = client
+        .request(reqwest::Method::OPTIONS, format!("http://{}/health", addr))
+        .header("Origin", "https://example.com")
+        .header("Access-Control-Request-Method", "GET")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        preflight
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "*"
+    );
+    let allow_methods = preflight
+        .headers()
+        .get("access-control-allow-methods")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(allow_methods.contains("GET"));
+}

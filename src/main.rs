@@ -107,6 +107,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/info", get(mcp_info_handler))
         .with_state(mcp_state);
 
+    // Allow browser apps (e.g. static sites hosted elsewhere) to read the
+    // public, read-only geolocation responses directly. See `cors_layer`.
+    let cors = ipgeolocation::cors_layer();
+
     // Build main router with access logging
     let app = Router::new()
         // Root endpoint - returns geolocation for client's IP
@@ -185,7 +189,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     },
                 ),
-        );
+        )
+        // CORS is the outermost layer so it wraps every route (and answers
+        // preflight requests) uniformly.
+        .layer(cors);
 
     tracing::info!("Starting server on {}", bind_address);
     tracing::info!("Endpoints:");
