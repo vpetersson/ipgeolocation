@@ -282,6 +282,13 @@ Health check endpoint.
 
 **Response:** `200 OK` with body `OK`
 
+## CORS
+
+All endpoints send `Access-Control-Allow-Origin: *` and answer CORS preflight
+requests, so browser apps hosted on any origin (for example a static site) can
+call the API directly with `fetch()` and read the response. The data is public
+and read-only; only `GET`/`HEAD` are allowed.
+
 ## Protocol Buffers (Protobuf) Support
 
 All API endpoints support Protocol Buffer responses for efficient binary serialization. Use content negotiation via the `Accept` header.
