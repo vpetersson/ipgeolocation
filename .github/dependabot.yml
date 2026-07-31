@@ -1,0 +1,72 @@
+# Dependabot configuration.
+#
+# The nine security alerts this repo was carrying were all transitive Rust
+# crates, and they sat for four months because nothing was watching. Alerts tell
+# you a vulnerable version is present; only an update actually removes it.
+#
+# cargo matters most here for a second reason: sbom.yml publishes the SBOM
+# straight from Cargo.lock, so a stale lockfile means the published SBOM
+# describes vulnerable versions that are still being shipped.
+version: 2
+
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Grouped so a quiet week is one reviewable PR. Security updates are
+      # raised separately by Dependabot regardless of this grouping.
+      cargo:
+        patterns:
+          - "*"
+
+  # The Dockerfile's base images.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      docker:
+        patterns:
+          - "*"
+
+  # CI uses actions/* (GitHub), docker/* (Docker's own) and sbomify's own
+  # action, so each is either first-party or from the vendor of the tool it
+  # wraps. Read the changelog before merging a bump: first-party status lowers
+  # the risk, it does not remove the review.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
