@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IP Geolocation — a self-hosted IP and timezone API in Rust</title>
+    <meta
+      name="description"
+      content="A self-hosted IP geolocation and timezone API. MaxMind GeoLite2 and timezone boundaries bundled in the container, so lookups never leave your infrastructure."
+    />
+    <link rel="canonical" href="https://vpetersson.github.io/ipgeolocation/" />
+    <meta name="theme-color" content="#e6e9ef" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181825" media="(prefers-color-scheme: dark)" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://vpetersson.github.io/ipgeolocation/" />
+    <meta property="og:title" content="IP Geolocation — a self-hosted IP and timezone API in Rust" />
+    <meta
+      property="og:description"
+      content="IP-to-location and coordinates-to-timezone, with the data bundled in the container. No third-party API in the request path."
+    />
+    <meta name="twitter:card" content="summary" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "IP Geolocation Service",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Docker",
+        "url": "https://vpetersson.github.io/ipgeolocation/",
+        "codeRepository": "https://github.com/vpetersson/ipgeolocation",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top-row">
+        <a class="brand" href="./">ipgeo<span>()</span></a>
+        <nav class="top-links">
+          <a href="#api">API</a>
+          <a href="#start">Run it</a>
+          <a href="https://geoip.vpetersson.com/">Live</a>
+          <a href="https://github.com/vpetersson/ipgeolocation">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="wrap">
+          <h1>An address<br /><em>becomes a place.</em></h1>
+          <p class="lede">
+            A self-hosted IP geolocation and timezone API. The MaxMind GeoLite2 database and the
+            timezone boundaries ship inside the container, so a lookup is a local read rather than a
+            call to somebody else's service.
+          </p>
+
+          <!-- Real request and real response, copied from the running service. -->
+          <div class="transform">
+            <div class="panel">
+              <span class="label">request</span>
+              <pre><span class="tok-key">curl</span> https://geoip.vpetersson.com<span class="tok-dim">/ipgeo?ip=</span><span class="tok-num">8.8.8.8</span></pre>
+            </div>
+            <div class="arrow" aria-hidden="true">→</div>
+            <div class="panel">
+              <span class="label">response</span>
+              <pre>{
+  <span class="tok-key">"latitude"</span>: <span class="tok-num">37.751</span>,
+  <span class="tok-key">"longitude"</span>: <span class="tok-num">-97.822</span>,
+  <span class="tok-key">"country_name"</span>: <span class="tok-num">"United States"</span>,
+  <span class="tok-key">"time_zone"</span>: { <span class="tok-key">"name"</span>: <span class="tok-num">"America/Chicago"</span> }
+}</pre>
+            </div>
+          </div>
+
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#start">Run your own</a>
+            <a class="btn btn-ghost" href="https://geoip.vpetersson.com/">Try the live one</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="wrap">
+        <div class="specs">
+          <div class="spec"><b>0</b><span>third-party calls per lookup</span></div>
+          <div class="spec"><b>2</b><span>things it answers: where, and what time</span></div>
+          <div class="spec"><b>JSON · protobuf</b><span>response formats</span></div>
+          <div class="spec"><b>amd64 · arm64</b><span>container images</span></div>
+        </div>
+      </div>
+
+      <section id="api">
+        <div class="wrap">
+          <h2>The API</h2>
+          <p class="section-sub">
+            Two shapes. The short one keeps a small, stable payload; the <code>/v1</code> one adds
+            currency, calling code, flags and the rest.
+          </p>
+
+          <pre class="block"><span class="tok-dim"># The caller's own address, detected from proxy headers</span>
+GET /
+
+<span class="tok-dim"># A specific address, short shape</span>
+GET /ipgeo?ip=<span class="tok-num">8.8.8.8</span>
+
+<span class="tok-dim"># A specific address, full shape</span>
+GET /v1/ipgeo?ip=<span class="tok-num">8.8.8.8</span>
+
+<span class="tok-dim"># Coordinates to timezone. Note the parameter is `long`, not `lon`.</span>
+GET /timezone?lat=<span class="tok-num">51.5074</span>&amp;long=<span class="tok-num">-0.1278</span>
+<span class="tok-dim">→ {"timezone":"Europe/London"}</span></pre>
+
+          <p class="section-sub" style="margin-bottom: 0">
+            The service also publishes <code>/openapi.yaml</code> and <code>/llms.txt</code>, so it
+            is describable to both a code generator and an agent without anyone writing a client by
+            hand.
+          </p>
+        </div>
+      </section>
+
+      <section
+        id="start"
+        style="background: var(--base); border-top: 1px solid var(--surface0); border-bottom: 1px solid var(--surface0)"
+      >
+        <div class="wrap">
+          <h2>Run your own</h2>
+          <p class="section-sub">
+            The image carries its own data, so there is no API key to obtain and no account to
+            create.
+          </p>
+          <pre class="block">docker run -p 3000:3000 ghcr.io/vpetersson/ipgeolocation:latest
+
+<span class="tok-dim"># then</span>
+curl <span class="tok-dim">"</span>http://localhost:3000/ipgeo?ip=<span class="tok-num">1.1.1.1</span><span class="tok-dim">"</span></pre>
+          <ol class="steps">
+            <li>
+              <h3>Start the container</h3>
+              <p>One process, one port, no external dependencies to wire up first.</p>
+            </li>
+            <li>
+              <h3>Put it behind your proxy</h3>
+              <p>
+                It reads <code>CF-Connecting-IP</code>, <code>X-Real-IP</code> and
+                <code>X-Forwarded-For</code>, so <code>GET /</code> answers for the real caller.
+              </p>
+            </li>
+            <li>
+              <h3>Let the cache work</h3>
+              <p>
+                An in-memory LRU sits in front of the database, and responses carry
+                <code>Cache-Control</code> so a proxy can hold them too.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Why run it yourself</h2>
+          <div class="feature-grid">
+            <div class="feature">
+              <h3>The addresses stay with you</h3>
+              <p>
+                A hosted geolocation API sees every IP you look up, which for most applications
+                means every visitor you have. This one sees nothing, because it is yours.
+              </p>
+            </div>
+            <div class="feature">
+              <h3>No rate limit, no key</h3>
+              <p>
+                The data is in the image. Lookups cost a memory read, so there is no quota to
+                budget or key to rotate.
+              </p>
+            </div>
+            <div class="feature">
+              <h3>Predictable latency</h3>
+              <p>
+                Nothing in the request path crosses the internet, so a lookup does not inherit
+                somebody else's outage or slow day.
+              </p>
+            </div>
+            <div class="feature">
+              <h3>Timezones from geometry</h3>
+              <p>
+                Coordinates resolve against real timezone boundaries with tzf-rs, rather than being
+                guessed from a country.
+              </p>
+            </div>
+            <div class="feature">
+              <h3>Protobuf when you want it</h3>
+              <p>Ask for protobuf instead of JSON where the payload size matters.</p>
+            </div>
+            <div class="feature">
+              <h3>Published with an SBOM</h3>
+              <p>
+                Each release publishes a software bill of materials, so what is inside the image is
+                a matter of record.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap foot-row">
+        <span>Built in Rust. Location data by MaxMind GeoLite2.</span>
+        <span>
+          <a href="https://github.com/vpetersson/ipgeolocation">Source</a> ·
+          <a href="https://github.com/vpetersson/ipgeolocation/issues">Issues</a> ·
+          <a href="https://geoip.vpetersson.com/">Live instance</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
