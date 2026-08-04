@@ -10,10 +10,10 @@ license = "MIT"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "fs"] }
 
 # IP geolocation
-maxminddb = "0.27"
+maxminddb = "0.30"
 
 # Timezone from coordinates
 tzf-rs = "1"
