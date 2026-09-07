@@ -1320,10 +1320,13 @@ async fn test_sitemap_endpoint() {
     assert!(body.contains("<?xml version"));
     assert!(body.contains("<urlset"));
     assert!(body.contains("test.example.com")); // Uses base_url from state
-    assert!(body.contains("/ipgeo"));
-    assert!(body.contains("/timezone"));
     assert!(body.contains("/openapi.yaml"));
     assert!(body.contains("/llms.txt"));
+
+    // Query-parameter API endpoints must stay out: a bare GET returns 400, and
+    // listing them made Search Console warn against the sitemap.
+    assert!(!body.contains("/ipgeo"));
+    assert!(!body.contains("/timezone"));
 }
 
 /// Test .well-known/openapi.yaml endpoint
