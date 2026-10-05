@@ -13,10 +13,10 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "fs"] }
 
 # IP geolocation
-maxminddb = "0.30"
+maxminddb = "0.32"
 
 # Timezone from coordinates
-tzf-rs = "1"
+tzf-rs = "2"
 
 # Caching
 moka = { version = "0.12", features = ["sync"] }
@@ -29,7 +29,7 @@ serde_json = "1"
 prost = "0.14"
 
 # OpenAPI documentation
-utoipa = { version = "5", features = ["axum_extras", "yaml"] }
+utoipa = { version = "6", features = ["axum_extras", "yaml"] }
 
 # Utilities
 thiserror = "2"
@@ -61,7 +61,7 @@ prost-build = "0.14"
 reqwest = { version = "0.13", features = ["json"] }
 tokio-test = "0.4"
 serde_urlencoded = "0.7"
-yaml-rust2 = "0.11"
+yaml-rust2 = "0.13"
 
 [[bin]]
 name = "mcp_server"
