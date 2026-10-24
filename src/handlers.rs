@@ -611,6 +611,11 @@ Sitemap: {}/sitemap.xml
 ///
 /// Returns a sitemap.xml for search engine and agent discovery.
 pub async fn sitemap_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Only fetchable documents belong here. The /ipgeo and /timezone endpoints
+    // require query parameters and answer a bare GET with HTTP 400, so listing
+    // them made Search Console flag the sitemap (15 warnings against 7 URLs).
+    // Crawlers cannot call them meaningfully, and their content is described by
+    // openapi.yaml and llms.txt, which are listed below.
     let base = &state.base_url;
     let sitemap = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -629,26 +634,6 @@ pub async fn sitemap_handler(State(state): State<AppState>) -> impl IntoResponse
     <loc>{base}/llms.txt</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>{base}/ipgeo</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>{base}/v1/ipgeo</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>{base}/timezone</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>{base}/v1/timezone</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
   </url>
 </urlset>"#
     );
