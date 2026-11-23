@@ -13,7 +13,7 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "fs"] }
 
 # IP geolocation
-maxminddb = "0.32"
+maxminddb = "0.33"
 
 # Timezone from coordinates
 tzf-rs = "2"
